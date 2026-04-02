@@ -1,0 +1,56 @@
+<Window x:Class="InvoiceSearch.AccountDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="E-Mail-Konto"
+        Height="380" Width="480"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="130"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Label Grid.Row="0" Content="Anzeigename:" VerticalAlignment="Center"/>
+        <TextBox Grid.Row="0" Grid.Column="1" x:Name="DisplayNameBox" Margin="0,4"/>
+
+        <Label Grid.Row="1" Content="E-Mail-Adresse:" VerticalAlignment="Center"/>
+        <TextBox Grid.Row="1" Grid.Column="1" x:Name="EmailAddressBox" Margin="0,4"/>
+
+        <Label Grid.Row="2" Content="IMAP-Server:" VerticalAlignment="Center"/>
+        <TextBox Grid.Row="2" Grid.Column="1" x:Name="ImapServerBox" Margin="0,4"/>
+
+        <Label Grid.Row="3" Content="IMAP-Port:" VerticalAlignment="Center"/>
+        <TextBox Grid.Row="3" Grid.Column="1" x:Name="ImapPortBox" Text="993" Margin="0,4" Width="80" HorizontalAlignment="Left"/>
+
+        <Label Grid.Row="4" Content="SSL verwenden:" VerticalAlignment="Center"/>
+        <CheckBox Grid.Row="4" Grid.Column="1" x:Name="UseSslBox" IsChecked="True" VerticalAlignment="Center" Margin="0,4"/>
+
+        <Label Grid.Row="5" Content="Benutzername:" VerticalAlignment="Center"/>
+        <TextBox Grid.Row="5" Grid.Column="1" x:Name="UsernameBox" Margin="0,4"/>
+
+        <Label Grid.Row="6" Content="Passwort:" VerticalAlignment="Center"/>
+        <PasswordBox Grid.Row="6" Grid.Column="1" x:Name="PasswordBox" Margin="0,4"/>
+
+        <StackPanel Grid.Row="8" Grid.ColumnSpan="2"
+                    Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="Verbindung testen und Speichern"
+                    Width="230" Height="30"
+                    Click="OnSaveClick" IsDefault="True" Margin="0,0,8,0"/>
+            <Button Content="Abbrechen"
+                    Width="100" Height="30"
+                    Click="OnCancelClick" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>
