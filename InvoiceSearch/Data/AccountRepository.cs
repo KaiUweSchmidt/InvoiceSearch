@@ -36,6 +36,12 @@ public sealed class AccountRepository : IDisposable
                 UseSsl INTEGER NOT NULL DEFAULT 1,
                 Username TEXT NOT NULL,
                 EncryptedPassword BLOB NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS SearchState (
+                AccountId INTEGER PRIMARY KEY,
+                LastSearchedUid INTEGER NOT NULL DEFAULT 0,
+                UidValidity INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (AccountId) REFERENCES EmailAccounts(Id) ON DELETE CASCADE
             )
             """;
         cmd.ExecuteNonQuery();
@@ -114,13 +120,79 @@ public sealed class AccountRepository : IDisposable
     }
 
     /// <summary>
-    /// Deletes an email account by Id.
+    /// Deletes an email account and its search state by Id.
     /// </summary>
     public void Delete(int id)
     {
+        using var deleteCache = _connection.CreateCommand();
+        deleteCache.CommandText = "DELETE FROM CachedDocuments WHERE AccountId = @id";
+        deleteCache.Parameters.AddWithValue("@id", id);
+        deleteCache.ExecuteNonQuery();
+
+        using var deleteState = _connection.CreateCommand();
+        deleteState.CommandText = "DELETE FROM SearchState WHERE AccountId = @id";
+        deleteState.Parameters.AddWithValue("@id", id);
+        deleteState.ExecuteNonQuery();
+
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = "DELETE FROM EmailAccounts WHERE Id = @id";
         cmd.Parameters.AddWithValue("@id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Returns the last processed IMAP UID for the given account, or <c>null</c> if no search has been recorded.
+    /// </summary>
+    public uint? GetLastSearchedUid(int accountId)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT LastSearchedUid FROM SearchState WHERE AccountId = @accountId";
+        cmd.Parameters.AddWithValue("@accountId", accountId);
+        var result = cmd.ExecuteScalar();
+        return result is long uid ? (uint)uid : null;
+    }
+
+    /// <summary>
+    /// Stores the last processed IMAP UID for the given account (upsert).
+    /// </summary>
+    public void SetLastSearchedUid(int accountId, uint uid)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO SearchState (AccountId, LastSearchedUid, UidValidity)
+            VALUES (@accountId, @uid, 0)
+            ON CONFLICT(AccountId) DO UPDATE SET LastSearchedUid = @uid
+            """;
+        cmd.Parameters.AddWithValue("@accountId", accountId);
+        cmd.Parameters.AddWithValue("@uid", (long)uid);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Returns the stored UidValidity for the given account, or <c>null</c> if not set.
+    /// </summary>
+    public uint? GetUidValidity(int accountId)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT UidValidity FROM SearchState WHERE AccountId = @accountId";
+        cmd.Parameters.AddWithValue("@accountId", accountId);
+        var result = cmd.ExecuteScalar();
+        return result is long val and > 0 ? (uint)val : null;
+    }
+
+    /// <summary>
+    /// Stores the UidValidity for the given account (upsert).
+    /// </summary>
+    public void SetUidValidity(int accountId, uint uidValidity)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO SearchState (AccountId, LastSearchedUid, UidValidity)
+            VALUES (@accountId, 0, @uidValidity)
+            ON CONFLICT(AccountId) DO UPDATE SET UidValidity = @uidValidity
+            """;
+        cmd.Parameters.AddWithValue("@accountId", accountId);
+        cmd.Parameters.AddWithValue("@uidValidity", (long)uidValidity);
         cmd.ExecuteNonQuery();
     }
 

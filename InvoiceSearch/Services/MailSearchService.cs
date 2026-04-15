@@ -10,7 +10,7 @@ namespace InvoiceSearch.Services;
 
 /// <summary>
 /// Searches email accounts for attachments that contain invoices,
-/// using MailKit for IMAP access and OllamaService for AI analysis.
+/// using MailKit for IMAP access and ClassificationService for AI analysis.
 /// </summary>
 public sealed class MailSearchService
 {
@@ -18,18 +18,39 @@ public sealed class MailSearchService
     private static readonly HashSet<string> s_textExtensions = [".txt", ".csv", ".html", ".htm", ".xml"];
 
     /// <summary>
-    /// Searches the INBOX of the given account for emails with invoice attachments.
-    /// Yields results as they are found (streaming).
+    /// Gets the highest UID processed during the last search call.
     /// </summary>
-    public async IAsyncEnumerable<InvoiceSearchResult> SearchAccountAsync(
+    public uint? LastProcessedUid { get; private set; }
+
+    /// <summary>
+    /// Gets the UidValidity of the inbox after opening.
+    /// </summary>
+    public uint? UidValidity { get; private set; }
+
+    /// <summary>
+    /// Indicates whether the UidValidity changed compared to the expected value.
+    /// </summary>
+    public bool UidValidityChanged { get; private set; }
+
+    /// <summary>
+    /// Searches the INBOX of the given account for emails with invoice attachments.
+    /// Supports incremental search via <paramref name="startAfterUid"/> and
+    /// automatic UidValidity change detection via <paramref name="expectedUidValidity"/>.
+    /// </summary>
+    public async IAsyncEnumerable<CachedDocument> SearchAccountAsync(
         EmailAccount account,
-        OllamaService ollama,
+        ClassificationService classifier,
+        IReadOnlyList<ClassificationRule>? classificationRules = null,
+        uint? startAfterUid = null,
+        uint? expectedUidValidity = null,
         IProgress<string>? progress = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(account);
-        ArgumentNullException.ThrowIfNull(ollama);
+        ArgumentNullException.ThrowIfNull(classifier);
 
+        LastProcessedUid = null;
+        UidValidityChanged = false;
         var password = CredentialProtector.Unprotect(account.EncryptedPassword);
 
         using var client = new ImapClient();
@@ -44,11 +65,29 @@ public sealed class MailSearchService
         var inbox = client.Inbox;
         await inbox.OpenAsync(FolderAccess.ReadOnly, cancellationToken);
 
+        UidValidity = inbox.UidValidity;
+
+        if (expectedUidValidity.HasValue && inbox.UidValidity != expectedUidValidity.Value)
+        {
+            UidValidityChanged = true;
+            startAfterUid = null;
+            progress?.Report("UidValidity geändert – suche alle E-Mails neu...");
+        }
+
+        var fetchItems = MessageSummaryItems.UniqueId
+                       | MessageSummaryItems.Envelope
+                       | MessageSummaryItems.BodyStructure;
+
         progress?.Report($"Lade Nachrichtenübersicht ({inbox.Count} E-Mails)...");
-        var items = MessageSummaryItems.UniqueId
-                  | MessageSummaryItems.Envelope
-                  | MessageSummaryItems.BodyStructure;
-        var summaries = await inbox.FetchAsync(0, -1, items, cancellationToken);
+        var allSummaries = await inbox.FetchAsync(0, -1, fetchItems, cancellationToken);
+
+        IList<IMessageSummary> summaries = startAfterUid.HasValue
+            ? [.. allSummaries.Where(s => s.UniqueId.Id > startAfterUid.Value)]
+            : allSummaries;
+
+        progress?.Report(startAfterUid.HasValue
+            ? $"{summaries.Count} neue E-Mails seit letzter Suche..."
+            : $"{summaries.Count} E-Mails geladen...");
 
         var totalWithAttachments = 0;
         var processed = 0;
@@ -56,6 +95,7 @@ public sealed class MailSearchService
         foreach (var summary in summaries)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            LastProcessedUid = summary.UniqueId.Id;
 
             var attachments = GetSupportedAttachments(summary);
             if (attachments.Count == 0)
@@ -71,14 +111,16 @@ public sealed class MailSearchService
                 var fileName = attachment.FileName ?? "unbekannt";
                 progress?.Report($"Analysiere Anhang \"{fileName}\" ({processed})...");
 
+                string documentText;
+                byte[] attachmentData;
                 InvoiceAnalysis? analysis;
                 try
                 {
-                    analysis = await AnalyzeAttachmentAsync(inbox, summary.UniqueId, attachment, ollama, cancellationToken);
+                    (documentText, attachmentData, analysis) = await AnalyzeAttachmentAsync(
+                        inbox, summary.UniqueId, attachment, classifier, classificationRules, cancellationToken);
                 }
                 catch (Exception)
                 {
-                    // Skip attachments that fail to download or analyze
                     continue;
                 }
 
@@ -90,14 +132,19 @@ public sealed class MailSearchService
                     ? (string.IsNullOrEmpty(fromAddress.Name) ? fromAddress.Address : $"{fromAddress.Name} <{fromAddress.Address}>")
                     : string.Empty;
 
-                yield return new InvoiceSearchResult
+                yield return new CachedDocument
                 {
+                    AccountId = account.Id,
+                    Uid = summary.UniqueId.Id,
+                    DocumentText = documentText,
+                    AttachmentData = attachmentData,
                     From = from,
                     ReceivedDate = summary.Envelope?.Date?.LocalDateTime ?? DateTime.MinValue,
                     Subject = summary.Envelope?.Subject ?? string.Empty,
                     AttachmentName = fileName,
                     InvoiceAmount = analysis.Amount,
-                    InvoiceDate = analysis.InvoiceDate
+                    InvoiceDate = analysis.InvoiceDate,
+                    InvoiceIssuer = analysis.Issuer
                 };
             }
         }
@@ -122,19 +169,20 @@ public sealed class MailSearchService
         return result;
     }
 
-    private static async Task<InvoiceAnalysis?> AnalyzeAttachmentAsync(
+    private static async Task<(string DocumentText, byte[] AttachmentData, InvoiceAnalysis? Analysis)> AnalyzeAttachmentAsync(
         IMailFolder folder,
         UniqueId uid,
         BodyPartBasic attachment,
-        OllamaService ollama,
+        ClassificationService classifier,
+        IReadOnlyList<ClassificationRule>? classificationRules,
         CancellationToken cancellationToken)
     {
         var entity = await folder.GetBodyPartAsync(uid, attachment, cancellationToken);
         if (entity is not MimePart mimePart)
-            return null;
+            return (string.Empty, [], null);
 
         using var ms = new MemoryStream();
-        await mimePart.Content.DecodeToAsync(ms, cancellationToken);
+        await mimePart.Content!.DecodeToAsync(ms, cancellationToken);
         var bytes = ms.ToArray();
 
         var ext = Path.GetExtension(attachment.FileName)?.ToLowerInvariant();
@@ -146,13 +194,13 @@ public sealed class MailSearchService
         }
         else
         {
-            // Text-based attachment (txt, csv, html, xml)
             documentText = System.Text.Encoding.UTF8.GetString(bytes);
         }
 
         if (string.IsNullOrWhiteSpace(documentText))
-            return null;
+            return (string.Empty, bytes, null);
 
-        return await ollama.AnalyzeDocumentTextAsync(documentText, cancellationToken);
+        var analysis = await classifier.AnalyzeDocumentTextAsync(documentText, classificationRules, cancellationToken);
+        return (documentText, bytes, analysis);
     }
 }

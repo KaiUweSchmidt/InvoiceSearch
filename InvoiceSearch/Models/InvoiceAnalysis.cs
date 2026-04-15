@@ -8,4 +8,5 @@ namespace InvoiceSearch.Models;
 public sealed record InvoiceAnalysis(
     [property: JsonPropertyName("isInvoice")] bool IsInvoice,
     [property: JsonPropertyName("amount")] decimal? Amount,
-    [property: JsonPropertyName("invoiceDate")] string? InvoiceDate);
+    [property: JsonPropertyName("invoiceDate")] string? InvoiceDate,
+    [property: JsonPropertyName("issuer")] string? Issuer);
