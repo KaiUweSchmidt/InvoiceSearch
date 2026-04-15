@@ -1,0 +1,28 @@
+<Window x:Class="InvoiceSearch.AccountsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="E-Mail-Konten verwalten"
+        Height="400" Width="620"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip">
+    <DockPanel Margin="12">
+        <StackPanel DockPanel.Dock="Bottom"
+                    Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Hinzufügen" Width="100" Height="28" Click="OnAddClick" Margin="0,0,8,0"/>
+            <Button Content="Bearbeiten" Width="100" Height="28" Click="OnEditClick" Margin="0,0,8,0"/>
+            <Button Content="Löschen" Width="100" Height="28" Click="OnDeleteClick" Margin="0,0,8,0"/>
+            <Button Content="Schließen" Width="100" Height="28" Click="OnCloseClick"/>
+        </StackPanel>
+
+        <ListView x:Name="AccountList" SelectionMode="Single" MouseDoubleClick="OnEditClick">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Anzeigename" Width="140" DisplayMemberBinding="{Binding DisplayName}"/>
+                    <GridViewColumn Header="E-Mail" Width="180" DisplayMemberBinding="{Binding EmailAddress}"/>
+                    <GridViewColumn Header="IMAP-Server" Width="150" DisplayMemberBinding="{Binding ImapServer}"/>
+                    <GridViewColumn Header="Port" Width="60" DisplayMemberBinding="{Binding ImapPort}"/>
+                </GridView>
+            </ListView.View>
+        </ListView>
+    </DockPanel>
+</Window>
