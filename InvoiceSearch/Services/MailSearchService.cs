@@ -182,7 +182,7 @@ public sealed class MailSearchService
             return (string.Empty, [], null);
 
         using var ms = new MemoryStream();
-        await mimePart.Content!.DecodeToAsync(ms, cancellationToken);
+        await mimePart.Content.DecodeToAsync(ms, cancellationToken);
         var bytes = ms.ToArray();
 
         var ext = Path.GetExtension(attachment.FileName)?.ToLowerInvariant();
