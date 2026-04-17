@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-    Erstellt ein Release: setzt die Version in der .csproj, erstellt einen PR von develop nach main und tagged main.
+    Erstellt ein Release: setzt die Version in der .csproj, erstellt einen PR von develop nach main,
+    tagged main und erstellt ein GitHub Release mit Build-Artefakten.
 
 .PARAMETER Version
     Die Release-Version im Format Major.Minor.Patch (z.B. 1.2.3).
@@ -103,6 +104,25 @@ try {
     git push origin "v$Version"
     if ($LASTEXITCODE -ne 0) { Write-Error "Tag konnte nicht gepusht werden." }
     Write-Host "Tag 'v$Version' erfolgreich gesetzt." -ForegroundColor Green
+
+    # --- Artefakte erstellen und GitHub Release anlegen ---
+    $artifactName = "InvoiceSearch_$Version"
+    $publishDir   = Join-Path $solutionRoot 'artifacts' 'publish' $artifactName
+    $zipPath      = Join-Path $solutionRoot 'artifacts' "$artifactName.zip"
+
+    Write-Host "Erstelle Release-Build ..." -ForegroundColor Cyan
+    dotnet publish $csprojPath -c Release -o $publishDir --self-contained false
+    if ($LASTEXITCODE -ne 0) { Write-Error "dotnet publish fehlgeschlagen." }
+
+    Write-Host "Erstelle ZIP-Archiv '$artifactName.zip' ..." -ForegroundColor Cyan
+    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+    Compress-Archive -Path "$publishDir\*" -DestinationPath $zipPath -CompressionLevel Optimal
+    Write-Host "Archiv erstellt: $zipPath" -ForegroundColor Green
+
+    Write-Host "Erstelle GitHub Release 'v$Version' mit Artefakt ..." -ForegroundColor Cyan
+    gh release create "v$Version" $zipPath --title "Release $Version" --notes "Release-Version **$Version**`n`nArtefakt: ``$artifactName.zip``" --latest
+    if ($LASTEXITCODE -ne 0) { Write-Error "GitHub Release konnte nicht erstellt werden." }
+    Write-Host "GitHub Release 'v$Version' erfolgreich erstellt." -ForegroundColor Green
 
     git checkout develop
     git pull origin develop

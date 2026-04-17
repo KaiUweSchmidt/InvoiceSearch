@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/Projektmappenelemente/">
     <File Path="README.md" />
+    <File Path="Scripts/Release.ps1" />
   </Folder>
   <Project Path="InvoiceSearch.Tests/InvoiceSearch.Tests.csproj" />
   <Project Path="InvoiceSearch/InvoiceSearch.csproj" />
