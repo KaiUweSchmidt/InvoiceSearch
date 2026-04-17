@@ -7,39 +7,48 @@ namespace InvoiceSearch.Services;
 /// <summary>
 /// Manages application settings persisted in app-settings.json.
 /// </summary>
-public static class AppSettingsService
+public sealed class AppSettingsService
 {
-    private static readonly string s_settingsPath;
+    private readonly string _settingsPath;
 
-    static AppSettingsService()
+    public AppSettingsService()
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var folder = Path.Combine(appData, "InvoiceSearch");
         Directory.CreateDirectory(folder);
-        s_settingsPath = Path.Combine(folder, "app-settings.json");
+        _settingsPath = Path.Combine(folder, "app-settings.json");
+    }
+
+    /// <summary>
+    /// Creates a service using a custom settings file path (for testing).
+    /// </summary>
+    public AppSettingsService(string settingsPath)
+    {
+        ArgumentNullException.ThrowIfNull(settingsPath);
+        _settingsPath = settingsPath;
     }
 
     /// <summary>
     /// Loads the persisted settings, or returns defaults if the file does not exist.
     /// </summary>
-    public static AppSettings Load()
+    public AppSettings Load()
     {
-        if (!File.Exists(s_settingsPath))
+        if (!File.Exists(_settingsPath))
             return new AppSettings();
 
-        var json = File.ReadAllText(s_settingsPath);
+        var json = File.ReadAllText(_settingsPath);
         return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
     }
 
     /// <summary>
     /// Persists the settings to disk.
     /// </summary>
-    public static void Save(AppSettings settings)
+    public void Save(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
         var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(s_settingsPath, json);
+        File.WriteAllText(_settingsPath, json);
     }
 }
 

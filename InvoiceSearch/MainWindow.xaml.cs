@@ -244,7 +244,7 @@ public partial class MainWindow : Window
 
     private void OnExportClick(object sender, RoutedEventArgs e)
     {
-        var settings = AppSettingsService.Load();
+        var settings = new AppSettingsService().Load();
         if (string.IsNullOrWhiteSpace(settings.ExportPath))
         {
             MessageBox.Show(
@@ -352,7 +352,8 @@ public partial class MainWindow : Window
             Title = "Ablageort für Rechnungen wählen"
         };
 
-        var settings = AppSettingsService.Load();
+        var settingsService = new AppSettingsService();
+        var settings = settingsService.Load();
         if (!string.IsNullOrWhiteSpace(settings.ExportPath))
         {
             dialog.InitialDirectory = settings.ExportPath;
@@ -360,7 +361,7 @@ public partial class MainWindow : Window
 
         if (dialog.ShowDialog(this) == true)
         {
-            AppSettingsService.Save(settings with { ExportPath = dialog.FolderName });
+            settingsService.Save(settings with { ExportPath = dialog.FolderName });
             StatusText.Text = $"Ablageort festgelegt: {dialog.FolderName}";
         }
     }
