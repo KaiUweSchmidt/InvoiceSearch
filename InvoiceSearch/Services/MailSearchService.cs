@@ -178,7 +178,7 @@ public sealed class MailSearchService
         CancellationToken cancellationToken)
     {
         var entity = await folder.GetBodyPartAsync(uid, attachment, cancellationToken);
-        if (entity is not MimePart mimePart)
+        if (entity is not MimePart mimePart || mimePart.Content is null)
             return (string.Empty, [], null);
 
         using var ms = new MemoryStream();

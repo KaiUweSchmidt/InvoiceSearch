@@ -10,6 +10,7 @@ namespace InvoiceSearch.Data;
 public sealed class AccountRepository : IDisposable
 {
     private readonly SqliteConnection _connection;
+    private readonly bool _ownsConnection;
 
     public AccountRepository()
     {
@@ -20,6 +21,18 @@ public sealed class AccountRepository : IDisposable
         var dbPath = Path.Combine(folder, "accounts.db");
         _connection = new SqliteConnection($"Data Source={dbPath}");
         _connection.Open();
+        _ownsConnection = true;
+        EnsureSchema();
+    }
+
+    /// <summary>
+    /// Creates a repository using an existing open connection (for testing).
+    /// </summary>
+    public AccountRepository(SqliteConnection connection)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        _connection = connection;
+        _ownsConnection = false;
         EnsureSchema();
     }
 
@@ -196,7 +209,11 @@ public sealed class AccountRepository : IDisposable
         cmd.ExecuteNonQuery();
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose()
+    {
+        if (_ownsConnection)
+            _connection.Dispose();
+    }
 
     private static void AddAccountParameters(SqliteCommand cmd, EmailAccount account)
     {
